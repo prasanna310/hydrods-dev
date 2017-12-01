@@ -4296,7 +4296,8 @@ def download_geospatial_and_forcing_files2(inputs_dictionary_json, download_requ
 
             return {'success': 'True'}
     else:
-        os.rename( os.path.join(working_dir, 'DEM84_prj%s.tif'%(x)), os.path.join(working_dir, 'mask.tif'))
+        shutil.copyfile(os.path.join(working_dir, 'DEM84_prj%s.tif'%(x)), os.path.join(working_dir, 'mask.tif'))
+        # os.rename( os.path.join(working_dir, 'DEM84_prj%s.tif'%(x)), os.path.join(working_dir, 'mask.tif'))
 
 
     if 'soil' in download_choice:
@@ -4312,12 +4313,18 @@ def download_geospatial_and_forcing_files2(inputs_dictionary_json, download_requ
     if 'forcing' in download_choice:
         print (' Downloading forcing files now... ')
 
+        # # if filled DEM not in the system,
+        # if 'terrain' not in download_choice:
+        #     input_dem_fname = 'DEM84_prj%s.tif'%(x)
+        # else:
+        #     input_dem_fname = 'fel.tif'
+
 
         # # # #:TODO Create rain and ET for 1000m first, and then resample it for user desired cell size # # #
 
         abstractclimatedata = calculate_rain_ET_from_daymet(input_raster=os.path.join(working_dir,'mask.tif'),
                                                             cell_size=inputs_dictionary['cell_size'],
-                                                            input_dem = os.path.join(working_dir,'fel.tif'),
+                                                            input_dem = os.path.join(working_dir,'DEM84_prj%s.tif'%(x)),
                                                             startDate=inputs_dictionary['simulation_start_date'],
                                                             endDate=inputs_dictionary['simulation_end_date'],
                                                             output_et_reference_fname= os.path.join(working_dir,'ET_reference.nc'),
