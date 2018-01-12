@@ -340,6 +340,35 @@ def create_config_files_TOPKAPI_ini(path_to_out_ini,
     return path_to_out_ini
 
 
+def download_daymet2(input_raster, startYear,endYear):
+    import requests
+
+    list_of_years = [startYear+item for item in range(endYear-startYear+1)]
+    working_dir = os.path.split(input_raster)[0]
+    print ('Progress --> Daymet working dir: ',working_dir)
+    os.chdir(working_dir)
+
+    in_raster = get_raster_detail(input_raster)
+    west, east, south, north = in_raster['minx']-.05, in_raster['maxx']+.05, in_raster['miny']-.02, in_raster['maxy']+.02
+
+    for year in list_of_years:
+        for var in ['tmin', 'tmax', 'prcp', 'vp', 'srad']:
+            str = 'https://thredds.daac.ornl.gov/thredds/ncss/ornldaac/1328/%s/daymet_v3_%s_%s_na.nc4?' \
+                  'var=lat&var=lon&var=%s&north=%s&west=%s&east=%s&south=%s&' \
+                  'disableProjSubset=on&horizStride=1&time_start=%s-01-01T12:00:00Z&' \
+                  'time_end=%s-12-30T12:00:00Z&timeStride=1&accept=netcdf'%(year,var,year ,var,north, west, east, south, year, year)
+            print (working_dir+'/%s_%s.nc'%(var, year))
+
+            response = requests.get(str)
+            if response.status_code == 200:
+                print ('Progress --> Downloading success')
+                res =  response.content
+                f = open (working_dir+'/%s_%s.nc'%(var, year), 'wb')
+                f.write(res)
+                f.close()
+    return
+
+
 def get_variable_in_file_config_parser(section, variable, ini_file):
     from configparser import SafeConfigParser
     config = SafeConfigParser()
@@ -1020,6 +1049,237 @@ def abstract_climate(startDate, endDate, input_raster, cell_size=None,
 
     return {'success': 'True'}
 
+
+def abstract_climate_webservice(startDate, endDate, input_raster, cell_size=None,
+                     output_vp_fname='output_vp.nc', output_tmin_fname='output_tmin.nc',
+                     output_tmax_fname='output_tmax.nc', output_srad_fname='output_srad.nc',
+                     output_prcp_fname='output_prcp.nc'):  # , output_dayl_fname='output_dayl.nc'
+    """
+
+    :param startDate:       format accepted mm/dd/yyyy
+    :param endDate:         format accepted mm/dd/yyyy
+    :param input_watershed: tif
+    :param cell_size:       integer ( float might work too)
+    :param climate_variable:string. Accepted values are 'tmin', 'tmax', 'srad', 'prcp'. 'ALL' is accepted if all the files are desired . Default is 'prcp'
+    :param output_nc_fname:
+    :return:
+    Output_element,         netcdf_variable,    units:
+    Precipitation           prcp                mm/day
+    Shortwave  radiation	srad	            W/m2
+    Snow water equivalent	swe	                kg/m2
+    Maximum air temperature	tmax	            degrees C
+    Minimum air temperature	tmin	            degrees C
+    Water vapor pressure	vp	                Pa
+    """
+    os.chdir(os.path.split(input_raster)[0])
+    # does not use any other HydroDS, usese the data stored in the running HydroDS
+    print ('Step0, Getting daymet netcdfs for timeperiod: %s to %s, for the region defined by %s'%(startDate, endDate, input_raster))
+    from datetime import datetime
+
+    input_watershed = input_raster
+
+    startYear = datetime.strptime(startDate, "%m/%d/%Y").year
+    endYear = datetime.strptime(endDate, "%m/%d/%Y").year
+
+    start_time_index =  int(format(datetime.strptime(startDate, "%m/%d/%Y"), '%j')) #datetime.strptime(startDate, "%m/%d/%Y").day
+    end_time_index =start_time_index + (datetime.strptime(endDate, "%m/%d/%Y") - datetime.strptime(startDate, "%m/%d/%Y")).days
+
+    print ('start_time_index, end_time_index', start_time_index, end_time_index)
+
+    print ('Progress --> Step1: Renaming Variables')
+    if cell_size is None:
+        cell_size = int(get_cellSize(input_watershed))
+
+    rasterToNetCDF_rename_variable(input_watershed, output_netcdf='watershed0.nc')
+
+
+    # In the netCDF file rename the generic variable "Band1" to "watershed"
+    Watershed_NC_out = 'watershed.nc'
+    Watershed_NC = netCDF_rename_variable(input_netcdf='watershed0.nc',
+                                          output_netcdf=Watershed_NC_out, input_varname='Band1',
+                                          output_varname='watershed')
+
+    print ('Progress --> Downloading files using webservice.........')
+    download_daymet2(input_raster, startYear, endYear)
+
+    print ('Progress --> Step2, Merging and subsetting netcdfs for the time period...')
+    climate_Vars = ['vp', 'tmin', 'tmax', 'srad', 'prcp']  # , 'dayl'
+    for var in climate_Vars:
+        for year in range(startYear, endYear + 1):
+            climatestaticFile1 = os.path.split(input_raster)[0]+'/'+ var + "_" + str(year) + ".nc"  #4
+            climateFile1 = var + "__" + str(year) + ".nc"
+            Year1sub_request = subset_netCDF_to_reference_raster(input_netcdf=climatestaticFile1,
+                                                                 reference_raster=input_watershed,
+                                                                 output_netcdf=climateFile1)
+            concatFile = "conc_" + climateFile1
+            if year == startYear:
+                concatFile1_url = climateFile1
+            else:
+                concatFile2_url = climateFile1
+                concateNC_request = concatenate_netCDF(input_netcdf1=concatFile1_url,
+                                                       input_netcdf2=concatFile2_url,
+                                                       output_netcdf=concatFile)
+                concatFile1_url = concatFile
+
+        timesubFile = "tSub_" + climateFile1
+        subset_NC_by_time_result = get_netCDF_subset_TimeDim(input_netcdf=concatFile1_url,
+                                                             time_dim_name='time', start_time_index=start_time_index,
+                                                             end_time_index=end_time_index, output_netcdf=timesubFile)
+        subset_NC_by_time_file_url = timesubFile
+
+        # name the output file
+        if var == 'prcp':
+            proj_resample_file = output_prcp_fname
+        elif var == 'tmin':
+            proj_resample_file = output_tmin_fname
+        elif var == 'tmax':
+            proj_resample_file = output_tmax_fname
+        elif var == 'srad':
+            proj_resample_file = output_srad_fname
+        elif var == 'vp':
+            proj_resample_file = output_vp_fname
+        # elif var == 'dayl':
+        #     proj_resample_file = output_dayl_fname
+
+
+
+        ncProj_resample_result = project_subset_and_resample_netcdf_to_reference_netcdf(
+                                                                    input_netcdf=subset_NC_by_time_file_url,
+                                                                    reference_netcdf=Watershed_NC_out,
+                                                                    variable_name=var, output_netcdf=proj_resample_file)
+        ncProj_resample_file_url = proj_resample_file
+
+    print ('Step3: Deleting temp files')
+    required_files_list = [output_prcp_fname, output_tmin_fname, output_tmax_fname, output_srad_fname, output_vp_fname]
+
+
+
+    # delete all the other temporary nc files
+    onlyfiles = [f for f in os.listdir() if os.path.isfile(f)]
+
+    # for file in  onlyfiles: #unnecessary_nc_fullpath:
+    #     if file not in required_files_list:
+    #         os.remove(file)
+
+    return {'success': 'True'}
+
+
+def abstract_climate_webservice2(startDate='10/01/2002', endDate='10/01/2003', input_raster='/home/ahmet/ciwater/usu_data_service/workspace/67d81a5b03b44311b72c3964f8ee5c63/mask.tif', cell_size=None,
+                                 output_vp_fname='output_vp.nc', output_tmin_fname='output_tmin.nc',
+                                 output_tmax_fname='output_tmax.nc', output_srad_fname='output_srad.nc',
+                                 output_prcp_fname='output_prcp.nc'):  # , output_dayl_fname='output_dayl.nc'
+    """
+
+    :param startDate:       format accepted mm/dd/yyyy
+    :param endDate:         format accepted mm/dd/yyyy
+    :param input_watershed: tif
+    :param cell_size:       integer ( float might work too)
+    :param climate_variable:string. Accepted values are 'tmin', 'tmax', 'srad', 'prcp'. 'ALL' is accepted if all the files are desired . Default is 'prcp'
+    :param output_nc_fname:
+    :return:
+    Output_element,         netcdf_variable,    units:
+    Precipitation           prcp                mm/day
+    Shortwave  radiation	srad	            W/m2
+    Snow water equivalent	swe	                kg/m2
+    Maximum air temperature	tmax	            degrees C
+    Minimum air temperature	tmin	            degrees C
+    Water vapor pressure	vp	                Pa
+    """
+
+
+    os.chdir(os.path.split(input_raster)[0])
+    # does not use any other HydroDS, usese the data stored in the running HydroDS
+    print ('Step0, Getting daymet netcdfs for timeperiod: %s to %s, for the region defined by %s' % (
+    startDate, endDate, input_raster))
+    from datetime import datetime
+
+    input_watershed = input_raster
+
+    startYear = datetime.strptime(startDate, "%m/%d/%Y").year
+    endYear = datetime.strptime(endDate, "%m/%d/%Y").year
+
+    start_time_index = int(
+        format(datetime.strptime(startDate, "%m/%d/%Y"), '%j'))  # datetime.strptime(startDate, "%m/%d/%Y").day
+    end_time_index = start_time_index + (
+    datetime.strptime(endDate, "%m/%d/%Y") - datetime.strptime(startDate, "%m/%d/%Y")).days
+
+    print ('start_time_index, end_time_index', start_time_index, end_time_index)
+
+    print ('Progress --> Step1: Renaming Variables')
+    if cell_size is None:
+        cell_size = int(get_cellSize(input_watershed))
+
+    rasterToNetCDF_rename_variable(input_watershed, output_netcdf='watershed0.nc')
+
+    # In the netCDF file rename the generic variable "Band1" to "watershed"
+    Watershed_NC_out = 'watershed.nc'
+    Watershed_NC = netCDF_rename_variable(input_netcdf='watershed0.nc',
+                                          output_netcdf=Watershed_NC_out, input_varname='Band1',
+                                          output_varname='watershed')
+
+    print ('Progress --> Downloading files using webservice.........')
+    #download_daymet2(input_raster, startYear, endYear)
+
+    print ('Progress --> Step2, Merging and subsetting netcdfs for the time period...')
+    climate_Vars = ['vp', 'tmin', 'tmax', 'srad', 'prcp']  # , 'dayl'
+    for var in climate_Vars:
+        for year in range(startYear, endYear + 1):
+            downloaded_nc_1 = os.path.split(input_raster)[0] + '/' + var + "_" + str(year) + ".nc"  # 4
+            climate_nc_1 = var + "__" + str(year) + ".nc"
+            subset_netCDF_to_reference_raster(input_netcdf=downloaded_nc_1,
+                                              reference_raster=input_watershed,
+                                              output_netcdf=climate_nc_1)
+            concatFile = "conc_" + climate_nc_1
+            if year == startYear:
+                concatFile1_url = climate_nc_1
+            else:
+                concatFile2_url = climate_nc_1
+                concatenate_netCDF(input_netcdf1=concatFile1_url,
+                                   input_netcdf2=concatFile2_url,
+                                   output_netcdf=concatFile)
+                concatFile1_url = concatFile
+
+        timesubFile = "tSub_" + climate_nc_1
+        subset_NC_by_time_result = get_netCDF_subset_TimeDim(input_netcdf=concatFile1_url,
+                                                             time_dim_name='time', start_time_index=start_time_index,
+                                                             end_time_index=end_time_index, output_netcdf=timesubFile)
+        subset_NC_by_time_file_url = timesubFile
+
+        # name the output file
+        if var == 'prcp':
+            proj_resample_file = output_prcp_fname
+        elif var == 'tmin':
+            proj_resample_file = output_tmin_fname
+        elif var == 'tmax':
+            proj_resample_file = output_tmax_fname
+        elif var == 'srad':
+            proj_resample_file = output_srad_fname
+        elif var == 'vp':
+            proj_resample_file = output_vp_fname
+        # elif var == 'dayl':
+        #     proj_resample_file = output_dayl_fname
+
+
+
+        ncProj_resample_result = project_subset_and_resample_netcdf_to_reference_netcdf(
+            input_netcdf=subset_NC_by_time_file_url,
+            reference_netcdf=Watershed_NC_out,
+            variable_name=var, output_netcdf=proj_resample_file)
+        ncProj_resample_file_url = proj_resample_file
+
+    print ('Step3: Deleting temp files')
+    required_files_list = [output_prcp_fname, output_tmin_fname, output_tmax_fname, output_srad_fname, output_vp_fname]
+
+    # delete all the other temporary nc files
+    onlyfiles = [f for f in os.listdir() if os.path.isfile(f)]
+
+    # for file in  onlyfiles: #unnecessary_nc_fullpath:
+    #     if file not in required_files_list:
+    #         os.remove(file)
+
+    return {'success': 'True'}
+
+
 def abstract_climate_HDS(startDate, endDate, input_raster, cell_size=None,
                      output_vp_fname='output_vp.nc', output_tmin_fname='output_tmin.nc',
                      output_tmax_fname='output_tmax.nc', output_srad_fname='output_srad.nc',
@@ -1357,7 +1617,7 @@ def calculate_reference_et_from_netCDFs(dem_nc, srad_nc, tmax_nc, tmin_nc, out_e
     return eto
 
 
-def calculate_rain_ET_from_daymet(startDate, endDate, input_raster, input_dem, cell_size=None,
+def calculate_rain_ET_from_daymet(startDate, endDate, input_raster, input_dem, cell_size=None, source='offline',
                                   output_et_reference_fname='ET_reference.nc', output_rain_fname='rain.nc'):
     """
 
@@ -1377,10 +1637,19 @@ def calculate_rain_ET_from_daymet(startDate, endDate, input_raster, input_dem, c
 
     print ("Progress >> ET calculations will begin shortly. Final netcdf file will be saved in" + dir)
 
-    abstract_climate(startDate=startDate, endDate=endDate, input_raster=input_raster, cell_size=cell_size,
-                     output_vp_fname=dir + '/output_vp.nc', output_tmin_fname=dir + '/output_tmin.nc',
-                     output_tmax_fname=dir + '/output_tmax.nc', output_srad_fname=dir + '/output_srad.nc',
-                     output_prcp_fname=output_rain_fname)   # gives ppt unit in mm/day
+    source = 'webservice'
+    if source == 'offline':
+        abstract_climate(startDate=startDate, endDate=endDate, input_raster=input_raster, cell_size=cell_size,
+                         output_vp_fname=dir + '/output_vp.nc', output_tmin_fname=dir + '/output_tmin.nc',
+                         output_tmax_fname=dir + '/output_tmax.nc', output_srad_fname=dir + '/output_srad.nc',
+                         output_prcp_fname=output_rain_fname)   # gives ppt unit in mm/day
+    else:
+        abstract_climate_webservice2(
+            #startDate=startDate, endDate=endDate, input_raster=input_raster,
+            cell_size=cell_size,
+                         output_vp_fname=dir + '/output_vp.nc', output_tmin_fname=dir + '/output_tmin.nc',
+                         output_tmax_fname=dir + '/output_tmax.nc', output_srad_fname=dir + '/output_srad.nc',
+                         output_prcp_fname=output_rain_fname)   # gives ppt unit in mm/day
 
     rasterToNetCDF_rename_variable(input_dem, output_netcdf=dir + '/watershed0.nc')
 
@@ -4371,27 +4640,6 @@ def download_geospatial_and_forcing_files2(inputs_dictionary_json, download_requ
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def command_string_to_zip(command_string=None, in_zip=None, out_zip=None):
     # idea : let user access HydroDS terminal. He can use zip file to input, and will get zip output
     if in_zip != None:
@@ -4401,7 +4649,28 @@ def command_string_to_zip(command_string=None, in_zip=None, out_zip=None):
     return call_subprocess(command_string, command_string + ' could not be executed')
 
 
-
+# if __name__ == "__main__":
+#     climate_Vars = ['vp', 'tmin', 'tmax', 'srad', 'prcp']  # , 'dayl'
+#     startYear = 2002
+#     endYear = 2003
+#     input_raster = '/home/ahmet/ciwater/usu_data_service/workspace/9d9fdf1c94124cc88f32e36266f374c5/mask.tif'
+#     for var in climate_Vars:
+#         for year in range(startYear, endYear + 1):
+#             climatestaticFile1 = os.path.split(input_raster)[0]+'/'+ var + "_" + str(year) + ".nc"  #4
+#             climateFile1 = var + "__" + str(year) + ".nc"
+#             Year1sub_request = subset_netCDF_to_reference_raster(input_netcdf=climatestaticFile1,
+#                                                                  reference_raster=input_raster,
+#                                                                  output_netcdf=climateFile1)
+#             concatFile = "conc_" + climateFile1
+#             if year == startYear:
+#                 concatFile1_url = climateFile1
+#             else:
+#                 concatFile2_url = climateFile1
+#                 concateNC_request = concatenate_netCDF(input_netcdf1=concatFile1_url,
+#                                                        input_netcdf2=concatFile2_url,
+#                                                        output_netcdf=concatFile)
+#                 concatFile1_url = concatFile
+#
 
 
 
