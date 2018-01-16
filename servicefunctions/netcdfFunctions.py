@@ -176,6 +176,121 @@ def project_subset_and_resample_netcdf_to_reference_netcdf(input_netcdf, referen
     #delete temp netcdf file
     #os.remove(temp_netcdf)
 
+def project_subset_and_resample_daymet_netcdf_to_reference_netcdf(input_netcdf, reference_netcdf, variable_name, output_netcdf):
+    """This re-grids a netcdf to target/reference resolution
+    Input coordinates are time, y, x
+    Warning: Works only if the target boundary is within the input boundary & the coordinates directions are
+    the same, i.e. y increasing / decreasing """
+
+    if os.path.exists(output_netcdf):
+        os.remove(output_netcdf)
+
+    # Read input geo information
+    srs_data_ = gdal.Open(input_netcdf, GA_ReadOnly)
+    srs_data = gdal.Open(srs_data_.GetSubDatasets()[2][0], GA_ReadOnly)
+
+
+    srs_geotrs = srs_data.GetGeoTransform()
+    Nxin = srs_data.RasterXSize
+    Nyin = srs_data.RasterYSize
+    srs_proj = srs_data.GetProjection()
+    srs_data = None
+
+    #Add dummy dimensions and variables
+    # temp_netcdf = output_netcdf
+    # cmdString = "ncrename -d x,x_2 -d y,y_2 -v x,x_2 -v y,y_2 -v"+variable_name+","+variable_name+"_2 "+\
+    #              input_netcdf+" "+temp_netcdf
+    # callSubprocess(cmdString, 'copy netcdf with rename old dimensions')
+
+    temp_netcdf_1 = os.path.join(os.path.dirname(output_netcdf), 'temp_1.nc')
+    if os.path.exists(temp_netcdf_1):
+        os.remove(temp_netcdf_1)
+
+
+    cmdString = "ncrename -v x,x_2 -v y,y_2 -v "+variable_name+","+variable_name+"_2 "+\
+                 input_netcdf+" "+temp_netcdf_1
+
+    subprocess_response_dict = call_subprocess(cmdString, 'copy netcdf with rename old dimensions')
+    if subprocess_response_dict['success'] == 'False':
+        return subprocess_response_dict
+
+    temp_netcdf_2 = os.path.join(os.path.dirname(output_netcdf), 'temp_2.nc')
+    if os.path.exists(temp_netcdf_2):
+        os.remove(temp_netcdf_2)
+    cmdString = "ncrename -d x,x_2 -d y,y_2 " + temp_netcdf_1+" "+temp_netcdf_2
+
+    subprocess_response_dict = call_subprocess(cmdString, 'copy netcdf with rename old dimensions')
+    if subprocess_response_dict['success'] == 'False':
+        return subprocess_response_dict
+
+    ncRef = netCDF4.Dataset(reference_netcdf,"r") # format='NETCDF4')
+    xout = ncRef.variables['x'][:]
+    yout = ncRef.variables['y'][:]
+    ncRef.close()
+
+    ncIn = netCDF4.Dataset(input_netcdf,"r") # format='NETCDF4')
+    xin = ncIn.variables['x'][:]
+    yin = ncIn.variables['y'][:]
+
+    ncOut = netCDF4.Dataset(temp_netcdf_2,"r+", format='NETCDF4')
+    ncOut.createDimension('y',len(yout))
+    ncOut.createDimension('x', len(xout))
+    dataType = ncIn.variables['x'].datatype
+    vardataType = ncIn.variables[variable_name].datatype
+    ncOut.createVariable('y',dataType,('y',))
+    ncOut.createVariable('x',dataType,('x',))
+    ncOut.variables['y'][:] = yout[:]
+    ncOut.variables['x'][:] = xout[:]
+    ncOut.createVariable(variable_name,vardataType,('time','y','x',))
+    #Copy attributes
+    varAtts = ncIn.variables[variable_name].ncattrs()
+    attDict = dict.fromkeys(varAtts)
+    for attName in varAtts:
+        attDict[attName] = getattr(ncIn.variables[variable_name],attName)
+
+    ncOut.variables[variable_name].setncatts(attDict)
+    xAtts = ncIn.variables['x'].ncattrs()
+    attDict = dict.fromkeys(xAtts)
+    for attName in xAtts:
+        attDict[attName] = getattr(ncIn.variables['x'],attName)
+    ncOut.variables['x'].setncatts(attDict)
+    yAtts = ncIn.variables['y'].ncattrs()
+    attDict = dict.fromkeys(yAtts)
+    for attName in yAtts:
+        attDict[attName] = getattr(ncIn.variables['y'],attName)
+    ncOut.variables['y'].setncatts(attDict)
+    ncOut.close()
+    #delete the old variables
+    cmdString = "ncks -4 -C -x -v x_2,y_2,"+variable_name+"_2 "+\
+                 temp_netcdf_2+" "+output_netcdf
+    #callSubprocess(cmdString, 'delete old dimensions')
+    subprocess_response_dict = call_subprocess(cmdString, 'delete old dimensions')
+    if subprocess_response_dict['success'] == 'False':
+        return subprocess_response_dict
+
+    #re-open file to write re-gridded data
+    ncOut = netCDF4.Dataset(output_netcdf,"r+") #, format='NETCDF4')
+    varin = numpy.zeros((len(yin),len(xin)),dtype=vardataType)
+    varout = numpy.zeros((len(yout),len(xout)),dtype=vardataType)
+    timeLen = len(ncIn.dimensions['time'])
+    #yLen = len(yout)
+    #xLen = len(xout)
+    for tk in range(timeLen):
+        varin[:,:] = ncIn.variables[variable_name][tk,:,:]
+        #Because gdal tif and Daymet nc y axes directions differ, here array is reversed
+        #varin_rev = varin[::-1]
+        varout[:,:] = project_and_resample_Array(varin, srs_geotrs, srs_proj, Nxin, Nyin, reference_netcdf)
+        ncOut.variables[variable_name][tk,:,:] = varout[:,:]
+    ncIn.close()
+    ncOut.close()
+
+    subprocess_response_dict['message'] = "project, sunset and resample of netcdf was successful"
+    return subprocess_response_dict
+    #delete temp netcdf file
+    #os.remove(temp_netcdf)
+
+
+
 """char transverse_mercator long form:
 {'grid_mapping_name' : "transverse_mercator" ,'longitude_of_central_meridian' : -111. ,'false_easting' : 500000. , ' false_northing' : 0. , 'latitude_of_projection_origin' : 0.  , 'scale_factor_at_central_meridian' : 0.9996,
 'longitude_of_prime_meridian' : 0. , 'semi_major_axis' : 6378137. , 'inverse_flattening' : 298.257222101 ,
@@ -291,6 +406,62 @@ def subset_netCDF_to_reference_raster(input_netcdf, reference_raster, output_net
 
     data_set = None
     return call_subprocess(cmdString, 'subset netcdf')
+
+def subset_Daymet_netCDF_to_reference_raster(input_netcdf, reference_raster, output_netcdf):
+    """ this gives netcdf subset for reference_raster; to get the exact boundary of the
+        reference_raster, the input and reference must have same resolution
+        The coordinates of the bounding box are projected to the netcdf projection
+    To Do: Boundary check-> check if the bounding box of subset raster is
+               within the input_netcdf's boundary
+    Boundary parameters extracted from reference_Raster
+    """
+
+    if os.path.exists(output_netcdf):
+        os.remove(output_netcdf)
+
+
+    data_set = gdal.Open(reference_raster, GA_ReadOnly)
+    s_srs = data_set.GetProjection()
+    geo_transform = data_set.GetGeoTransform()
+    # use ulx uly lrx lry
+    xmin = geo_transform[0]
+    ymax = geo_transform[3]
+    dx = geo_transform[1]
+    dy = geo_transform[5]
+    xmax = xmin + dx * data_set.RasterXSize
+    ymin = ymax + dy* data_set.RasterYSize          # dy is -ve
+    data_set = None
+
+    data_set_ = gdal.Open(input_netcdf, GA_ReadOnly)
+    data_set = gdal.Open(data_set_.GetSubDatasets()[2][0], GA_ReadOnly)
+    t_srs = data_set.GetProjection()
+    geo_transform = data_set.GetGeoTransform()
+    dxT = geo_transform[1]
+    dyT = -1*(geo_transform[5])       #dy is -ve
+    data_set = None
+
+    nwX, nwY = project_a_point_srs(xmin,ymax,s_srs,t_srs)
+    neX, neY = project_a_point_srs(xmax,ymax,s_srs,t_srs)
+    seX, seY = project_a_point_srs(xmax,ymin,s_srs,t_srs)
+    swX, swY = project_a_point_srs(xmin, ymax,s_srs,t_srs)
+
+    #take the bigger cell size for buffer
+    if(dx > dxT):
+        dxT = dx
+    if(-1*dy > dyT):
+        dyT = -1*dy
+    #add a buffer around the boundary
+    xmin = lesser(nwX,swX) - 2*dxT
+    xmax = greater(seX,neX) + 2*dxT
+    ymin = lesser(swY,seY) - 2*dyT
+    ymax = greater(nwY,neY) + 2*dyT
+
+    cmdString = "ncea -4 -d y,"+str(ymin)+","+str(ymax)+" -d x,"+str(xmin)+","+str(xmax)+" -O "\
+                 +input_netcdf+" "+output_netcdf
+
+    data_set = None
+    return call_subprocess(cmdString, 'subset netcdf')
+
 
 #this gives netcdf subset along the time dimension
 def get_netCDF_subset_TimeDim(input_netcdf, output_netcdf, time_dim_name, start_time_index, end_time_index):

@@ -1164,7 +1164,8 @@ def abstract_climate_webservice(startDate, endDate, input_raster, cell_size=None
     return {'success': 'True'}
 
 
-def abstract_climate_webservice2(startDate='10/01/2002', endDate='10/01/2003', input_raster='/home/ahmet/ciwater/usu_data_service/workspace/67d81a5b03b44311b72c3964f8ee5c63/mask.tif', cell_size=None,
+def abstract_climate_webservice2(
+                                startDate='10/01/2002', endDate='10/01/2003', input_raster='/home/ahmet/ciwater/usu_data_service/workspace/67d81a5b03b44311b72c3964f8ee5c63/mask.tif', cell_size=None,
                                  output_vp_fname='output_vp.nc', output_tmin_fname='output_tmin.nc',
                                  output_tmax_fname='output_tmax.nc', output_srad_fname='output_srad.nc',
                                  output_prcp_fname='output_prcp.nc'):  # , output_dayl_fname='output_dayl.nc'
@@ -1218,7 +1219,7 @@ def abstract_climate_webservice2(startDate='10/01/2002', endDate='10/01/2003', i
                                           output_varname='watershed')
 
     print ('Progress --> Downloading files using webservice.........')
-    #download_daymet2(input_raster, startYear, endYear)
+    download_daymet2(input_raster, startYear, endYear)
 
     print ('Progress --> Step2, Merging and subsetting netcdfs for the time period...')
     climate_Vars = ['vp', 'tmin', 'tmax', 'srad', 'prcp']  # , 'dayl'
@@ -1226,7 +1227,7 @@ def abstract_climate_webservice2(startDate='10/01/2002', endDate='10/01/2003', i
         for year in range(startYear, endYear + 1):
             downloaded_nc_1 = os.path.split(input_raster)[0] + '/' + var + "_" + str(year) + ".nc"  # 4
             climate_nc_1 = var + "__" + str(year) + ".nc"
-            subset_netCDF_to_reference_raster(input_netcdf=downloaded_nc_1,
+            subset_Daymet_netCDF_to_reference_raster(input_netcdf=downloaded_nc_1,
                                               reference_raster=input_watershed,
                                               output_netcdf=climate_nc_1)
             concatFile = "conc_" + climate_nc_1
@@ -1261,7 +1262,7 @@ def abstract_climate_webservice2(startDate='10/01/2002', endDate='10/01/2003', i
 
 
 
-        ncProj_resample_result = project_subset_and_resample_netcdf_to_reference_netcdf(
+        ncProj_resample_result = project_subset_and_resample_daymet_netcdf_to_reference_netcdf(
             input_netcdf=subset_NC_by_time_file_url,
             reference_netcdf=Watershed_NC_out,
             variable_name=var, output_netcdf=proj_resample_file)
@@ -1645,7 +1646,7 @@ def calculate_rain_ET_from_daymet(startDate, endDate, input_raster, input_dem, c
                          output_prcp_fname=output_rain_fname)   # gives ppt unit in mm/day
     else:
         abstract_climate_webservice2(
-            #startDate=startDate, endDate=endDate, input_raster=input_raster,
+            startDate=startDate, endDate=endDate, input_raster=input_raster,
             cell_size=cell_size,
                          output_vp_fname=dir + '/output_vp.nc', output_tmin_fname=dir + '/output_tmin.nc',
                          output_tmax_fname=dir + '/output_tmax.nc', output_srad_fname=dir + '/output_srad.nc',
