@@ -66,6 +66,8 @@ def project_and_resample_Array(input_array, srs_geotrs, srs_proj, Nxin, Nyin, re
     out_data = None
     return output_array
 
+
+
 def project_subset_and_resample_netcdf_to_reference_netcdf(input_netcdf, reference_netcdf, variable_name, output_netcdf):
     """This re-grids a netcdf to target/reference resolution
     Input coordinates are time, y, x
@@ -182,6 +184,7 @@ def project_subset_and_resample_daymet_netcdf_to_reference_netcdf(input_netcdf, 
     Warning: Works only if the target boundary is within the input boundary & the coordinates directions are
     the same, i.e. y increasing / decreasing """
 
+    # based on : https://gis.stackexchange.com/questions/168910/gdal-python-extracting-projection-info-from-hdf-file
     if os.path.exists(output_netcdf):
         os.remove(output_netcdf)
 
@@ -415,7 +418,7 @@ def subset_Daymet_netCDF_to_reference_raster(input_netcdf, reference_raster, out
                within the input_netcdf's boundary
     Boundary parameters extracted from reference_Raster
     """
-
+    # based on : https://gis.stackexchange.com/questions/168910/gdal-python-extracting-projection-info-from-hdf-file
     if os.path.exists(output_netcdf):
         os.remove(output_netcdf)
 

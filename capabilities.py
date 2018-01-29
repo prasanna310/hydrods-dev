@@ -176,8 +176,10 @@ def get_service_info(service_name):
     services_info_dict['helloworld'] = _get_hello_world_info
     services_info_dict['reclassifyrasterwithlut'] = _get_reclassify_raster_with_LUT_info
     services_info_dict['delineatewatershedtogetcompleterasterset'] = _get_delineatewatershedtogetcompleterasterset_info
-    services_info_dict['runpytopkapi'] = _get_runpytopkapi_info
 
+    services_info_dict['createandrunTOPKAPI'] = _get_createandrunTOPKAPI_info
+    services_info_dict['createTOPNETinputs'] = _get_createTOPNETinputs_info
+    services_info_dict['downloadgeospatialandforcingfiles2'] = _get_downloadgeospatialandforcingfiles2_info
 
     if service_name in services_info_dict:
         return services_info_dict[service_name]()
@@ -1323,78 +1325,111 @@ def _get_delineatewatershedtogetcompleterasterset_info():
                                                              })]
           }
 
-def _get_runpytopkapi_info():
-    service_name = "runpytopkapi"
-    return {service_name: [{'end_point':_get_end_point(service_name),
-                        'parameters': [
-                            _get_param_dict(name='user_name',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='simulation_name',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='simulation_start_date',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='simulation_end_date',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='USGS_gage',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='outlet_x',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='outlet_y',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='box_topY',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='box_bottomY',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='box_rightX',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='box_leftX',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='timeseries_source',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='threshold',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='cell_size',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='timestep',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
-                            _get_param_dict(name='model_engine',
-                                            description='String: ',
-                                            required=True,
-                                            type='string'),
 
-                        ],
-                        'http_method': 'GET'
-                                        },
-                                        _get_json_response_format(data_dict={'output_zip': 'url of the zip file created'}
-                                                                  )]
+input_dictionary_description = "Dictionary of input parameters. e.g.inputs_dictionary= {'timeseries_source': 'Daymet', 'box_topY': 34.219727, 'model_engine': 'TOPNET', 'simulation_end_date': '02/01/2000', 'pk_max_threshold': 50000, 'epsgCode': 102003, 'threshold_topnet': 100, 'init_soil_percentsat': 30.0, 'outlet_y': 34.12128, 'init_overland_vol': 0.26999999999999996, 'box_rightX': -117.084475, 'box_bottomY': 34.116044, 'init_channel_flow': 0.03, 'threshold': 5, 'pk_min_threshold': 500, 'timestep': 24, 'simulation_folder': '', 'simulation_start_date': '01/01/2000', 'box_leftX': -117.164777, 'outlet_x': -117.141284, 'pk_num_thershold': 12, 'simulation_name': 'Plunge_2000_topnet', 'user_name': 'prasanna_310', 'cell_size': 30.0, 'USGS_gage': '11055500'}",
+json_file_description = 'url of the output response JSON file'
+zip_file_description = 'url of the output zip file containing files created during the process'
+
+
+def _get_createandrunTOPKAPI_info():
+    service_name = 'createandrunTOPKAPI'
+    return {service_name: [{'end_point': _get_end_point(service_name), 'http_method': 'GET',
+                            'parameters': [
+                                            _get_param_dict(name='inputs_dictionary_as_string',
+                                                            description=input_dictionary_description,
+                                                            required=True,
+                                                            type='string'),
+
+                                            _get_param_dict(name='hs_username',
+                                                            description='HydroShare Username',
+                                                            required=False,
+                                                            type='string'),
+                                _get_param_dict(name='hs_client_id',
+                                                description='HydroShare client_id',
+                                                required=False,
+                                                type='string'),
+                                _get_param_dict(name='hs_client_secret',
+                                                description='HydroShare client_secret',
+                                                required=False,
+                                                type='string'),
+                                _get_param_dict(name='token',
+                                                description='HydroShare token',
+                                                required=False,
+                                                type='string'),
+
+                            ]
+                        },
+                        _get_json_response_format(data_dict={'output_response_txt': json_file_description,
+                                                             })]
           }
+
+def _get_createTOPNETinputs_info():
+    service_name = 'createTOPNETinputs'
+    return {service_name: [{'end_point': _get_end_point(service_name), 'http_method': 'GET',
+                            'parameters': [
+                                            _get_param_dict(name='inputs_dictionary_as_string',
+                                                            description=input_dictionary_description,
+                                                            required=True,
+                                                            type='string'),
+
+                                            _get_param_dict(name='hs_username',
+                                                            description='HydroShare Username',
+                                                            required=False,
+                                                            type='string'),
+                                _get_param_dict(name='hs_client_id',
+                                                description='HydroShare client_id',
+                                                required=False,
+                                                type='string'),
+                                _get_param_dict(name='hs_client_secret',
+                                                description='HydroShare client_secret',
+                                                required=False,
+                                                type='string'),
+                                _get_param_dict(name='token',
+                                                description='HydroShare token',
+                                                required=False,
+                                                type='string'),
+
+                            ]
+                        },
+                        _get_json_response_format(data_dict={'output_zipfile': zip_file_description,
+                                                             })]
+          }
+
+def _get_downloadgeospatialandforcingfiles2_info():
+    service_name = 'downloadgeospatialandforcingfiles2'
+    return {service_name: [{'end_point': _get_end_point(service_name), 'http_method': 'GET',
+                            'parameters': [
+                                            _get_param_dict(name='inputs_dictionary_as_string',
+                                                            description=input_dictionary_description,
+                                                            required=True,
+                                                            type='string'),
+                                _get_param_dict(name='download_request',
+                                                description='accepts the download request type. Needs to be separated by comma. e.g. "terrain" or "terrain,forcing", or "terrain,forcing,soil"',
+                                                required=True,
+                                                type='string'),
+
+                                            _get_param_dict(name='hs_username',
+                                                            description='HydroShare Username',
+                                                            required=False,
+                                                            type='string'),
+                                _get_param_dict(name='hs_client_id',
+                                                description='HydroShare client_id',
+                                                required=False,
+                                                type='string'),
+                                _get_param_dict(name='hs_client_secret',
+                                                description='HydroShare client_secret',
+                                                required=False,
+                                                type='string'),
+                                _get_param_dict(name='token',
+                                                description='HydroShare token',
+                                                required=False,
+                                                type='string'),
+
+                            ]
+                        },
+                        _get_json_response_format(data_dict={'output_response_txt': json_file_description,
+                                                             'output_zipfile': zip_file_description,
+                                                             })]
+          }
+
+

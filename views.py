@@ -790,7 +790,6 @@ funcs = {
 
 
 
-    # support for individual hydroshare
     'runpytopkapi8':
         {
             'function_to_execute': servicefunctions_pytopkapi.runpytopkapi8,
@@ -839,6 +838,9 @@ funcs = {
             'user_file_inputs': [],
             'validator': modifypytopkapi2validator
         },
+
+
+
     'downloadgeospatialandforcingfiles2':
         {
             'function_to_execute': servicefunctions_pytopkapi.download_geospatial_and_forcing_files2,
@@ -853,7 +855,35 @@ funcs = {
             'validator': downloadgeospatialandforcingfiles2RequestValidator
         },
 
-         }
+    # support for individual hydroshare
+    #  create_and_run_TOPKAPI(inputs_dictionary_json,hs_username=None,  hs_client_id=None, hs_client_secret=None, token=None)
+    'createandrunTOPKAPI':
+        {
+            'function_to_execute': servicefunctions_pytopkapi.create_and_run_TOPKAPI,
+            'file_inputs': [],
+            'file_outputs': [{'output_response_txt': 'output_response_json.txt',
+                              }],
+            'user_inputs': ['inputs_dictionary_as_string',
+                            'hs_username', 'hs_client_id', 'hs_client_secret', 'token',
+                            ],
+            'user_file_inputs': [],
+            'validator': createandrunTOPKAPIRequestValidator
+        },
+
+    'createTOPNETinputs':
+        {
+            'function_to_execute': servicefunctions_pytopkapi.create_TOPNET_inputs,
+            'file_inputs': [],
+            'file_outputs': [{'output_zipfile': 'TOPNET_output.zip',
+                              }],
+            'user_inputs': ['inputs_dictionary_as_string',
+                            'hs_username', 'hs_client_id', 'hs_client_secret', 'token',
+                            ],
+            'user_file_inputs': [],
+            'validator': createTOPNETinputsRequestValidator
+        },
+
+}
 
 
 class RunService(APIView):

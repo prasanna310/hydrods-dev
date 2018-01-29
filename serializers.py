@@ -1003,6 +1003,27 @@ class runpytopkapi8validator(serializers.Serializer):
     hs_client_secret = serializers.CharField(required=False)
     token = serializers.CharField(required=False)
 
+class createandrunTOPKAPIRequestValidator(serializers.Serializer):
+    # inputs_dictionary_json = serializers.URLField(required=True)
+    inputs_dictionary_as_string  = serializers.CharField(required=True)
+    output_response_txt = serializers.CharField(required=False)
+    # output_response_txt= serializers.CharField(required=False)
+
+    hs_username = serializers.CharField(required=False)
+    hs_client_id = serializers.CharField(required=False)
+    hs_client_secret = serializers.CharField(required=False)
+    token = serializers.CharField(required=False)
+
+class createTOPNETinputsRequestValidator(serializers.Serializer):
+    # inputs_dictionary_json = serializers.URLField(required=True)
+    inputs_dictionary_as_string  = serializers.CharField(required=True)
+    output_zipfile = serializers.CharField(required=False)
+
+    hs_username = serializers.CharField(required=False)
+    hs_client_id = serializers.CharField(required=False)
+    hs_client_secret = serializers.CharField(required=False)
+    token = serializers.CharField(required=False)
+
 
 class downloadgeospatialandforcingfiles2RequestValidator(serializers.Serializer):
     inputs_dictionary_json = serializers.URLField(required=True)
