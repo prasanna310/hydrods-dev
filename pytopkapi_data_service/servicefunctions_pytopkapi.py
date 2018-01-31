@@ -2499,12 +2499,14 @@ def vol_balance(result_fname,precip_fname, delta_t, X,cell_id  ):
 def reclassify_raster_with_LUT(input_raster, LUT, output_raster='reclassified_raster.tif', delimiter=","):
     # LUT_array = np.genfromtxt(LUT, delimiter=delimiter)
     import pandas as pd
+    import numpy as np
     LUT_array = np.array(pd.read_csv(LUT))
 
     calc_list = ['%s*(A==%s)' % (new, old) for old, new in LUT_array]
     calc_string = "+".join(calc_list)
     cmdString = 'gdal_calc.py -A %s --outfile=%s --calc="' % (
     input_raster, output_raster) + calc_string + '" --type=Float32'
+    print (cmdString)
     return call_subprocess(cmdString, 'reclassify raster')
 
 
@@ -4336,9 +4338,12 @@ def runpytopkapi8_v2(user_name, simulation_name, simulation_start_date, simulati
         os.remove(file)
 
     # Upload the directory to HydroShare
-    hs_res_id_created = push_to_hydroshare(simulation_name=simulation_name, data_folder=simulation_folder,
-                                           hs_username=hs_username, hs_client_id=hs_client_id, hs_client_secret=hs_client_secret, token=token)
-
+    try:
+        hs_res_id_created = push_to_hydroshare(simulation_name=simulation_name, data_folder=simulation_folder,
+                                               hs_username=hs_username, hs_client_id=hs_client_id, hs_client_secret=hs_client_secret, token=token)
+    except:
+        print ('Progress --> Failed saving files to  HydroShare')
+    hs_res_id_created = push_to_hydroshare(simulation_name=simulation_name, data_folder=simulation_folder)
     # # Write q_obs and q_sim to JSON file, to be returned to the user / app
     # run_1.write_json_response(output_response_txt, hs_res_id_created, q_obs_status)
 
@@ -5062,13 +5067,13 @@ def download_geospatial_and_forcing_files2_v2(inputs_dictionary_as_string,workin
                                                                          reference_raster='mask.tif',
                                                                          output_raster='nlcdProj.tif')
 
-            reclassify_nlcd = reclassify_raster_with_LUT(LUT=LUT_overland, input_raster='nlcdProj.tif',
-                                                         output_raster='mannings_n.tif')
-        except:
-            print ('Error: Downloading NLCD files')
+            reclassify_nlcd = reclassify_raster_with_LUT(LUT=LUT_overland, input_raster=working_dir+'/nlcdProj.tif',
+                                                         output_raster=working_dir+'/mannings_n.tif')
+        except Exception as e:
+            print ('Error: Downloading NLCD files:- ', e)
             print ('Assuming the area wanted is outside of CONUS, the process is conculded! :p ')
 
-            return {'success': 'True'}
+
     else:
         shutil.copyfile(os.path.join(working_dir, 'DEM84_prj%s.tif'%(x)), os.path.join(working_dir, 'mask.tif'))
         # os.rename( os.path.join(working_dir, 'DEM84_prj%s.tif'%(x)), os.path.join(working_dir, 'mask.tif'))
