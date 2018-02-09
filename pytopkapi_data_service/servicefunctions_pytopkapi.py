@@ -19,6 +19,7 @@ import pytopkapi.utils as ut
 from datetime import datetime, timedelta
 from osgeo import gdal, ogr
 from distutils.dir_util import copy_tree
+import numpy as np
 
 def get_cellSize(tif_file):
     try:
@@ -516,6 +517,7 @@ def create_rain_ET_from_cell_no(simulation_folder, total_no_of_cell, ppt_file_tx
 
 
 def get_outletID_noOfCell(cell_param_file):
+    import numpy as np
     cell_param_array = np.genfromtxt(cell_param_file, delimiter=' ')
     no_of_cell = cell_param_array.shape[0]
 
@@ -4739,7 +4741,7 @@ def create_and_run_TOPKAPI( inputs_dictionary_as_string,output_response_txt="pyt
    :param inputs_dictionary: Dictionary. Inputs from Tethys, or user requesting the service
    :return: output_response_txt! File with json string,and also saves al the files created to HydroShare
    """
-
+    import numpy as np
     inputs_dictionary = json.loads(inputs_dictionary_as_string)
     print ('inputs_dictionary=',inputs_dictionary)
 
